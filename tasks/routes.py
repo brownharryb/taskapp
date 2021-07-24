@@ -1,7 +1,7 @@
 import re
 import requests
 import json
-from flask import (Blueprint, render_template, current_app)
+from flask import (Blueprint, render_template, current_app, request)
 from geopy import distance as geopy_distance
 
 from tasks.exceptions import (GeoTaskException, NoLocationFoundException, RemoteResponseException,
@@ -15,24 +15,31 @@ MKAD = 'mkad'
 
 @task.get('/')
 def index():
-    address = 'Tverskaya+6'
-    # address = 'lagos'
-    log_address_distance_from_mkad(address)
-    return render_template('task_index.html')
+    address = request.values.get('address')
+    distances = []
+    already_logged_info = f'This has already been logged to "{current_app.config.get("LOG_FILENAME")}"'
+    if address:
+        distances = get_address_distance_from_mkad(address)
+    return render_template('task_index.html', address=address, distances=distances,
+                           already_logged_info=already_logged_info)
 
 
 @task.errorhandler(GeoTaskException)
 def handle_exceptions(err):
-    return f'Error Processing your request -> {str(err)}'
+    err = f'Error Processing your request -> {str(err)}'
+    current_app.logger.error(err)
+    address = request.values.get('address')
+    return render_template('task_index.html', error=err, address=address)
 
 
-def log_address_distance_from_mkad(address: str) -> None:
-    """Logs distance of supplied address against MKAD."""
+def get_address_distance_from_mkad(address: str) -> list:
+    """Logs and gets distances of supplied address against MKAD."""
+    distances = []
     mkad_info = get_address_members(MKAD)[0]
     params = _get_geocode_params(address)
     mkad_bounds = _extract_location_bounds(mkad_info)
     mkad_title = _get_location_info_title(mkad_info)
-    # No need calculating address it within MKAD
+    # No need calculating address if within MKAD
     if not _address_is_within_mkad_bounds(address, mkad_bounds, params=params):
         address_members = get_address_members(address)
         for member in address_members:  # Multiple distances will be logged for multiple results
@@ -41,6 +48,10 @@ def log_address_distance_from_mkad(address: str) -> None:
             distance = '{:,.2f}'.format(distance)
             message = f'Distance between "{mkad_title}" and "{member_title}" is approx {distance}km'
             current_app.logger.info(message)
+            distances.append(message)
+    else:
+        distances.append(f'Address distance for "{address}" skipped since its within MKAD.')
+    return distances
 
 
 def _calculate_distance_between(source: dict, destination: dict) -> int:
@@ -93,8 +104,11 @@ def fetch_address_info(address: str, params=None) -> dict:
     url = current_app.config.get('GEOCODE_API')
     if params is None:
         params = _get_geocode_params(address)
-    response = requests.get(url, params=params,
+    try:
+        response = requests.get(url, params=params,
                             timeout=current_app.config.get('GEOCODE_REQUEST_TIMEOUT', 5))
+    except requests.exceptions.ConnectionError:
+        raise RemoteResponseException(f'Please check connection')
     if response.status_code != 200:
         raise RemoteResponseException(f'Invalid response from Geo endpoint -> {response.content}')
     return json.loads(response.content)

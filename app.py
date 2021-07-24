@@ -8,10 +8,10 @@ app = Flask(__name__)
 app.config.from_object('config')
 
 # Init Logging
-logging.basicConfig(format='%(asctime)-15s %(message)s', filename=app.config.get('LOG_FILENAME', 'tasklog2.log'))
+logging.basicConfig(format='%(asctime)-15s %(message)s', filename=app.config.get('LOG_FILENAME'))
 
 # Register Blueprint
 app.register_blueprint(task)
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0')

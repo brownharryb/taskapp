@@ -20,18 +20,18 @@ class TaskTest(unittest.TestCase):
 
     def test_valid_location_not_empty_result(self):
         """Valid location fetch should not return an empty result."""
-        samples = ['mkad','moscow','lagos']
+        samples = ['mkad', 'moscow', 'lagos']
         with app.app_context():
             try:
                 for sample in samples:
                     members = get_address_members(sample)
                     self.assertTrue(len(members) > 0)
-            except:
+            except Exception:
                 self.fail('Empty result detected for valid locations')
 
     def test_empty_results_fetch(self):
         """Detect empty result when fetched."""
-        wrong_samples = ['kskjldnjhkdbhfbkj','jlhkhghjugjhv978','khdgfhbhjadf']
+        wrong_samples = ['kskjldnjhkdbhfbkj', 'jlhkhghjugjhv978', 'khdgfhbhjadf']
         with app.app_context():
             for sample in wrong_samples:
                 with self.assertRaises(NoLocationFoundException, msg=f'Exception not raised for empty result'):
